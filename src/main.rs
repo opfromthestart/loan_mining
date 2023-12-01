@@ -1,20 +1,103 @@
-use std::str::FromStr;
+use std::{
+    borrow::{Borrow, BorrowMut},
+    ops::{AddAssign, Deref, DerefMut, Sub},
+    str::FromStr,
+};
 
 use csv::ReaderBuilder;
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
-enum Value {
-    Number(f64),
-    Category(String),
-    None,
-}
+#[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
+struct F64(f64);
 
-impl Eq for Value {}
+impl Eq for F64 {}
 
-impl Ord for Value {
+impl Ord for F64 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
+}
+
+impl FromStr for F64 {
+    type Err = <f64 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.parse()?))
+    }
+}
+
+impl Borrow<f64> for F64 {
+    fn borrow(&self) -> &f64 {
+        &self.0
+    }
+}
+impl BorrowMut<f64> for F64 {
+    fn borrow_mut(&mut self) -> &mut f64 {
+        &mut self.0
+    }
+}
+impl Deref for F64 {
+    type Target = f64;
+
+    fn deref(&self) -> &Self::Target {
+        self.borrow()
+    }
+}
+impl DerefMut for F64 {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.borrow_mut()
+    }
+}
+
+impl AddAssign<F64> for f64 {
+    fn add_assign(&mut self, rhs: F64) {
+        *self += rhs.0;
+    }
+}
+impl AddAssign<&F64> for f64 {
+    fn add_assign(&mut self, rhs: &F64) {
+        *self += rhs.0;
+    }
+}
+
+impl Sub<F64> for f64 {
+    type Output = f64;
+
+    fn sub(self, rhs: F64) -> Self::Output {
+        self - rhs.0
+    }
+}
+impl Sub<f64> for F64 {
+    type Output = f64;
+
+    fn sub(self, rhs: f64) -> Self::Output {
+        self.0 - rhs
+    }
+}
+impl Sub<&f64> for &F64 {
+    type Output = f64;
+
+    fn sub(self, rhs: &f64) -> Self::Output {
+        self.0 - rhs
+    }
+}
+impl Sub<&F64> for &F64 {
+    type Output = f64;
+
+    fn sub(self, rhs: &F64) -> Self::Output {
+        self.0 - rhs.0
+    }
+}
+impl From<f64> for F64 {
+    fn from(value: f64) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+enum Value {
+    Number(F64),
+    Category(String),
+    None,
 }
 
 impl FromStr for Value {
@@ -128,7 +211,7 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
         };
         Corrs(
             (0..pred[0].len())
-                .map(|i| {
+                .map(|i| -> f64 {
                     let predi: Vec<_> = pred.iter().map(|v| &v[i]).collect();
                     match types.0[i] {
                         ValueType::Number { mean, sd } => {
@@ -139,7 +222,7 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                     Value::Category(_) => {
                                         panic!("Category found in numeric variable")
                                     }
-                                    Value::None => mean,
+                                    Value::None => mean.into(),
                                 };
                                 let tn = match t {
                                     Value::Number(n) => *n,
@@ -150,9 +233,66 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                 xy += (tn - tmean) * (n - mean);
                             }
                             xy /= count as f64;
-                            xy / (sd * tsd)
+                            (xy / (sd * tsd)).powi(2)
                         }
-                        ValueType::Category(_) => todo!(),
+                        ValueType::Category(n) => {
+                            let mut freqs: Vec<((Option<&String>, F64), f64)> = vec![];
+                            for (tl, cl) in target.iter().zip(predi.iter()) {
+                                let Value::Number(tl) = tl else {
+                                    panic!("Target wasnt a number");
+                                };
+                                let pl = match cl {
+                                    Value::Category(n) => Some(n),
+                                    Value::None => None,
+                                    Value::Number(_) => {
+                                        unreachable!("Number found in categorical variable")
+                                    }
+                                };
+                                match freqs
+                                    .iter_mut()
+                                    .find(|((plc, tlc), _)| tl == tlc && plc == &pl)
+                                {
+                                    Some((_, n)) => {
+                                        *n += 1.0;
+                                    }
+                                    None => {
+                                        freqs.push(((pl, *tl), 1.0));
+                                    }
+                                }
+                            }
+                            let mut freqp: Vec<(Option<&String>, f64)> = vec![];
+                            let mut total = 0.0;
+                            for ((pl, _), c) in freqs.iter() {
+                                match freqp.iter_mut().find(|(plc, _)| &plc == &pl) {
+                                    Some((_, n)) => {
+                                        *n += c;
+                                    }
+                                    None => {
+                                        freqp.push((*pl, *c));
+                                    }
+                                };
+                                total += *c;
+                            }
+                            assert_eq!(freqp.len(), n, "Number of categories is not correct.");
+                            let mut expected: Vec<((Option<&String>, F64), f64)> = freqp
+                                .iter()
+                                .flat_map(|(l, c)| {
+                                    [0.0, 1.0].iter().map(move |t| ((*l, (*t).into()), c * t))
+                                })
+                                .collect();
+                            freqs.sort_by_key(|(k, _)| k.clone());
+                            expected.sort_by_key(|(k, _)| k.clone());
+                            let mut chisq = 0.0;
+                            for (((p1, t1), c1), ((p2, t2), c2)) in
+                                freqs.into_iter().zip(expected.into_iter())
+                            {
+                                assert_eq!(p1, p2, "They were not sorted the same");
+                                assert_eq!(t1, t2, "Not sorted the same");
+                                chisq += ((c1 - c2) / total).powi(2);
+                            }
+                            todo!("Confirm this formula");
+                            (chisq / ((n - 1) as f64))
+                        }
                     }
                 })
                 .collect(),
@@ -160,10 +300,20 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
     }
 }
 
-fn record_dist(a: &Vec<Value>, b: &Vec<Value>, types: &ValueTypes, max: Option<f64>) -> f64 {
+fn record_dist(
+    a: &Vec<Value>,
+    b: &Vec<Value>,
+    types: &ValueTypes,
+    corrs: &Corrs,
+    max: Option<f64>,
+) -> f64 {
     let max = max.unwrap_or(f64::INFINITY);
     let mut dist = 0.0;
-    for ((av, bv), t) in a.iter().zip(b.iter()).zip(types.0.iter()) {
+    for ((av, bv), (t, r2)) in a
+        .iter()
+        .zip(b.iter())
+        .zip(types.0.iter().zip(corrs.0.iter()))
+    {
         dist += match (av, bv) {
             (Value::Number(an), Value::Number(bn)) => {
                 let ValueType::Number { mean: _, sd } = t else {
@@ -184,7 +334,10 @@ fn record_dist(a: &Vec<Value>, b: &Vec<Value>, types: &ValueTypes, max: Option<f
             (Value::Number(_), Value::Category(_)) | (Value::Category(_), Value::Number(_)) => {
                 unreachable!("Cannot have both numbers and categories")
             }
-        };
+        } * r2;
+        if dist > max {
+            return dist;
+        }
     }
     dist
 }
@@ -200,5 +353,7 @@ fn main() {
     println!("{loaded:?}");
     let targets: Vec<_> = loaded.iter().map(|v| v[1].clone()).collect();
     let preds: Vec<_> = loaded.iter().map(|v| v[2..].to_vec()).collect();
-    println!("{:?}", ValueTypes::try_from(&preds));
+    let types = ValueTypes::try_from(&preds).unwrap();
+    let corrs = Corrs::from((&targets, &preds));
+    println!("{types:?}",);
 }
