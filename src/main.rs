@@ -137,6 +137,7 @@ impl TryFrom<&Vec<Vec<Value>>> for ValueTypes {
             v.sort_unstable();
             v.dedup();
         });
+        println!("{transpose:?}");
         for i in transpose.iter() {
             if i.iter().any(|x| matches!(x, Value::Number(_)))
                 && i.iter().any(|x| matches!(x, Value::Category(_)))
@@ -183,7 +184,7 @@ impl TryFrom<&Vec<Vec<Value>>> for ValueTypes {
             }
             *t = ValueType::Number {
                 mean,
-                sd: var.sqrt(),
+                sd: (var / (count as f64)).sqrt(),
             };
         }
         Ok(ValueTypes(types))
@@ -233,6 +234,7 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                 xy += (tn - tmean) * (n - mean);
                             }
                             xy /= count as f64;
+                            println!("{xy} {sd} {tsd}");
                             (xy / (sd * tsd)).powi(2)
                         }
                         ValueType::Category(n) => {
@@ -260,9 +262,11 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                     }
                                 }
                             }
+                            println!("{freqs:?}");
                             let mut freqp: Vec<(Option<&String>, f64)> = vec![];
                             let mut total = 0.0;
-                            for ((pl, _), c) in freqs.iter() {
+                            let mut yes = 0.0;
+                            for ((pl, tl), c) in freqs.iter() {
                                 match freqp.iter_mut().find(|(plc, _)| &plc == &pl) {
                                     Some((_, n)) => {
                                         *n += c;
@@ -271,29 +275,41 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                         freqp.push((*pl, *c));
                                     }
                                 };
-                                total += *c;
+                                total += c;
+                                if tl.0 == 1.0 {
+                                    yes += c;
+                                }
                             }
                             assert_eq!(freqp.len(), n, "Number of categories is not correct.");
+                            println!("{freqp:?}");
                             let mut expected: Vec<((Option<&String>, F64), f64)> = freqp
                                 .iter()
                                 .flat_map(|(l, c)| {
-                                    [0.0, 1.0].iter().map(move |t| ((*l, (*t).into()), c * t))
+                                    // println!("{l:?} {c} {yes} {total}");
+                                    [
+                                        ((*l, F64(0.)), c * (total - yes) / total),
+                                        ((*l, F64(1.)), c * yes / total),
+                                    ]
                                 })
                                 .collect();
                             freqs.sort_by_key(|(k, _)| k.clone());
                             expected.sort_by_key(|(k, _)| k.clone());
+                            println!("{freqs:?}\n{expected:?}");
                             let mut chisq = 0.0;
-                            for (((p1, t1), c1), ((p2, t2), c2)) in
-                                freqs.into_iter().zip(expected.into_iter())
-                            {
-                                assert_eq!(p1, p2, "They were not sorted the same");
-                                assert_eq!(t1, t2, "Not sorted the same");
-                                chisq += ((c1 - c2) / total).powi(2);
+                            for ((p1, t1), c1) in expected.into_iter() {
+                                let c2 = freqs
+                                    .iter()
+                                    .find(|x| &x.0 == &(p1, t1))
+                                    .map(|(_, c)| *c)
+                                    .unwrap_or(0.);
+                                println!("{c1} {c2}");
+                                chisq += (c1 - c2).powi(2) / c1;
                             }
-                            todo!("Confirm this formula");
-                            (chisq / ((n - 1) as f64))
+                            // todo!("Confirm this formula");
+                            (chisq / total / ((n - 1) as f64)).sqrt()
                         }
                     }
+                    .sqrt()
                 })
                 .collect(),
         )
@@ -355,5 +371,5 @@ fn main() {
     let preds: Vec<_> = loaded.iter().map(|v| v[2..].to_vec()).collect();
     let types = ValueTypes::try_from(&preds).unwrap();
     let corrs = Corrs::from((&targets, &preds));
-    println!("{types:?}",);
+    println!("{types:?} {corrs:?}");
 }
