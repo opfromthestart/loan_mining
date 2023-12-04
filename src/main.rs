@@ -1,5 +1,8 @@
+use std::io::Write;
+
 use std::{
     borrow::{Borrow, BorrowMut},
+    fs::File,
     ops::{AddAssign, Deref, DerefMut, Sub},
     str::FromStr,
 };
@@ -137,7 +140,7 @@ impl TryFrom<&Vec<Vec<Value>>> for ValueTypes {
             v.sort_unstable();
             v.dedup();
         });
-        println!("{transpose:?}");
+        // println!("{transpose:?}");
         for i in transpose.iter() {
             if i.iter().any(|x| matches!(x, Value::Number(_)))
                 && i.iter().any(|x| matches!(x, Value::Category(_)))
@@ -234,7 +237,7 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                 xy += (tn - tmean) * (n - mean);
                             }
                             xy /= count as f64;
-                            println!("{xy} {sd} {tsd}");
+                            // println!("{xy} {sd} {tsd}");
                             (xy / (sd * tsd)).powi(2)
                         }
                         ValueType::Category(n) => {
@@ -262,7 +265,7 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                     }
                                 }
                             }
-                            println!("{freqs:?}");
+                            // println!("{freqs:?}");
                             let mut freqp: Vec<(Option<&String>, f64)> = vec![];
                             let mut total = 0.0;
                             let mut yes = 0.0;
@@ -281,7 +284,7 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                 }
                             }
                             assert_eq!(freqp.len(), n, "Number of categories is not correct.");
-                            println!("{freqp:?}");
+                            // println!("{freqp:?}");
                             let mut expected: Vec<((Option<&String>, F64), f64)> = freqp
                                 .iter()
                                 .flat_map(|(l, c)| {
@@ -294,7 +297,7 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                 .collect();
                             freqs.sort_by_key(|(k, _)| k.clone());
                             expected.sort_by_key(|(k, _)| k.clone());
-                            println!("{freqs:?}\n{expected:?}");
+                            // println!("{freqs:?}\n{expected:?}");
                             let mut chisq = 0.0;
                             for ((p1, t1), c1) in expected.into_iter() {
                                 let c2 = freqs
@@ -302,7 +305,7 @@ impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
                                     .find(|x| &x.0 == &(p1, t1))
                                     .map(|(_, c)| *c)
                                     .unwrap_or(0.);
-                                println!("{c1} {c2}");
+                                // println!("{c1} {c2}");
                                 chisq += (c1 - c2).powi(2) / c1;
                             }
                             // todo!("Confirm this formula");
@@ -322,14 +325,25 @@ fn record_dist(
     types: &ValueTypes,
     corrs: &Corrs,
     max: Option<f64>,
+    // Allows checking high variance dimensions first to short circuit fast.
+    order: Option<&[usize]>,
 ) -> f64 {
     let max = max.unwrap_or(f64::INFINITY);
     let mut dist = 0.0;
-    for ((av, bv), (t, r2)) in a
-        .iter()
-        .zip(b.iter())
-        .zip(types.0.iter().zip(corrs.0.iter()))
-    {
+    let poss_order = if order.is_none() {
+        Some((0..a.len()).collect::<Vec<_>>())
+    } else {
+        None
+    };
+    let order = order
+        .or(poss_order.as_deref())
+        .expect("One of these must be some");
+    for i in 0..a.len() {
+        let av = &a[order[i]];
+        let bv = &b[order[i]];
+        let t = &types.0[order[i]];
+        let r = &corrs.0[order[i]];
+
         dist += match (av, bv) {
             (Value::Number(an), Value::Number(bn)) => {
                 let ValueType::Number { mean: _, sd } = t else {
@@ -343,14 +357,19 @@ fn record_dist(
                 };
                 (n - mean).abs() / sd
             }
-            (Value::Category(_), Value::Category(_)) => todo!(),
-            (Value::Category(_), Value::None) => todo!(),
-            (Value::None, Value::Category(_)) => todo!(),
-            (Value::None, Value::None) => todo!(),
+            (Value::Category(n), Value::Category(m)) => {
+                if n == m {
+                    0.
+                } else {
+                    1.
+                }
+            }
+            (Value::Category(_), Value::None) | (Value::None, Value::Category(_)) => 1.,
+            (Value::None, Value::None) => 0.,
             (Value::Number(_), Value::Category(_)) | (Value::Category(_), Value::Number(_)) => {
                 unreachable!("Cannot have both numbers and categories")
             }
-        } * r2;
+        } * r;
         if dist > max {
             return dist;
         }
@@ -358,18 +377,107 @@ fn record_dist(
     dist
 }
 
+struct PrioN<T>(pub Vec<(T, f64)>, pub usize);
+
+impl<T> PrioN<T> {
+    fn insert(&mut self, i: f64, v: T) {
+        let ip = self
+            .0
+            .iter()
+            .position(|(_, t)| &i < t)
+            .unwrap_or(self.0.len());
+        self.0.insert(ip, (v, i));
+        if self.0.len() > self.1 {
+            self.0.remove(self.1);
+        }
+    }
+
+    fn new(size: usize) -> Self {
+        Self(vec![], size)
+    }
+
+    fn worst(&self) -> Option<f64> {
+        self.0.last().map(|(_, f)| *f)
+    }
+}
+
+fn knn(
+    a: &Vec<Value>,
+    pop: &Vec<Vec<Value>>,
+    targets: &Vec<Value>,
+    types: &ValueTypes,
+    corrs: &Corrs,
+    // Allows checking high variance dimensions first to short circuit fast.
+    order: Option<&[usize]>,
+    n: usize,
+) -> f64 {
+    let mut prio: PrioN<usize> = PrioN::new(n);
+    for (i, b) in pop.iter().enumerate() {
+        prio.insert(record_dist(a, b, types, corrs, prio.worst(), order), i);
+        // println!("{}", prio.0.len());
+    }
+    prio.0
+        .into_iter()
+        .map(|(v, _)| &targets[v])
+        .map(|t| {
+            let Value::Number(tn) = t else {
+                panic!("Target was not number in knn");
+            };
+            tn.0 / (n as f64)
+        })
+        .sum()
+}
+
 fn main() {
-    let loaded: Vec<Vec<Value>> = ReaderBuilder::new()
-        .from_path("test.csv")
-        .unwrap()
+    let mut file = ReaderBuilder::new()
+        .from_path("application_data.csv")
+        .unwrap();
+    let headers: Vec<_> = file.headers().unwrap().iter().map(String::from).collect();
+    let loaded: Vec<Vec<Value>> = file
         .into_records()
         .into_iter()
         .map(|d| d.unwrap().into_iter().map(|x| x.parse().unwrap()).collect())
         .collect();
-    println!("{loaded:?}");
+    // println!("{loaded:?}");
     let targets: Vec<_> = loaded.iter().map(|v| v[1].clone()).collect();
+    println!("Loaded targets");
     let preds: Vec<_> = loaded.iter().map(|v| v[2..].to_vec()).collect();
+    println!("Loaded variables");
     let types = ValueTypes::try_from(&preds).unwrap();
+    println!("Identified types");
     let corrs = Corrs::from((&targets, &preds));
-    println!("{types:?} {corrs:?}");
+    println!("{types:?}\n{corrs:?}");
+    write!(
+        File::create("app_data_corrs.txt").unwrap(),
+        "{types:?}\n{corrs:?}\n"
+    )
+    .unwrap();
+    let mut cor_ind: Vec<_> = corrs
+        .0
+        .iter()
+        .enumerate()
+        .map(|(i, c)| (i, c, &headers[i + 2]))
+        .collect();
+    cor_ind.sort_by_key(|(_, v, _)| F64(-*v));
+    write!(
+        File::create("app_data_corrs_rank.txt").unwrap(),
+        "{cor_ind:?}\n"
+    )
+    .unwrap();
+    // cor_ind.iter().for_each(|(x, _, _)| print!("{x}, "));
+    let order: Vec<_> = cor_ind.into_iter().map(|(i, _, _)| i).collect();
+    println!("Computing error");
+    let mut err = 0.0;
+    let mut i = 0;
+    for (a, t) in preds.iter().zip(targets.iter()) {
+        i += 1;
+        println!("{i}");
+        let Value::Number(t) = t else {
+            panic!("Category in target variable");
+        };
+        let k = knn(a, &preds, &targets, &types, &corrs, Some(&order), 20);
+        err += (k - t.0).powi(2);
+    }
+    err = (err / (preds.len() as f64)).sqrt();
+    println!("Err: {err}");
 }
