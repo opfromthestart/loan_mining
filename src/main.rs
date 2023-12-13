@@ -513,46 +513,46 @@ fn main() {
     .unwrap();
     // cor_ind.iter().for_each(|(x, _, _)| print!("{x}, "));
     let order: Vec<_> = cor_ind.into_iter().map(|(i, _, _)| i).collect();
-    {
-        println!("Computing error");
-        let mut err = 0.0;
-        let mut i = 0;
-        let mut prop = 0.;
-        let mut test_freq = BTreeSet::new();
-        for (a, t) in preds_test.iter().zip(test.iter()) {
-            i += 1;
-            // println!("{i}");
-            if i % 10 == 0 {
-                print!("\r{i}");
-                std::io::stdout().flush().unwrap();
-            }
-            let Value::Number(t) = t else {
-                panic!("Category in target variable");
-            };
-            let k = knn(
-                a,
-                preds as &[_],
-                targets as &[_],
-                &types,
-                &corrs,
-                Some(&order),
-                16,
-                None,
-            );
-            test_freq.insert(F64(k));
-            // println!("{k} {t:?}");
-            err += (k - t.0).powi(2);
-            prop += t;
-        }
-        prop /= preds.len() as f64;
-        err = (err / (preds.len() as f64)).sqrt();
-        println!("Err: {err}, worst={}", (prop * (1.0 - prop)).sqrt());
-        println!("{test_freq:?}");
-    }
-    // loop {
-    //     println!("Input borrower data");
-    //     let ir = prompt_record();
-    //     let k = knn(&ir, preds, targets, &types, &corrs, Some(&order), 30, None);
-    //     println!("Prediction for borrower default is {k}");
+    // {
+    //     println!("Computing error");
+    //     let mut err = 0.0;
+    //     let mut i = 0;
+    //     let mut prop = 0.;
+    //     let mut test_freq = BTreeSet::new();
+    //     for (a, t) in preds_test.iter().zip(test.iter()) {
+    //         i += 1;
+    //         // println!("{i}");
+    //         if i % 10 == 0 {
+    //             print!("\r{i}");
+    //             std::io::stdout().flush().unwrap();
+    //         }
+    //         let Value::Number(t) = t else {
+    //             panic!("Category in target variable");
+    //         };
+    //         let k = knn(
+    //             a,
+    //             preds as &[_],
+    //             targets as &[_],
+    //             &types,
+    //             &corrs,
+    //             Some(&order),
+    //             16,
+    //             None,
+    //         );
+    //         test_freq.insert(F64(k));
+    //         // println!("{k} {t:?}");
+    //         err += (k - t.0).powi(2);
+    //         prop += t;
+    //     }
+    //     prop /= preds.len() as f64;
+    //     err = (err / (preds.len() as f64)).sqrt();
+    //     println!("Err: {err}, worst={}", (prop * (1.0 - prop)).sqrt());
+    //     println!("{test_freq:?}");
     // }
+    loop {
+        println!("Input borrower data");
+        let ir = prompt_record();
+        let k = knn(&ir, preds, targets, &types, &corrs, Some(&order), 30, None);
+        println!("Prediction for borrower default is {k}");
+    }
 }
