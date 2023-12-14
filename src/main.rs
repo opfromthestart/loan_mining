@@ -1,3 +1,4 @@
+use std::collections::{BTreeSet, HashSet};
 use std::io::Write;
 
 use std::{
@@ -126,10 +127,10 @@ enum ValueType {
 #[derive(Debug)]
 struct ValueTypes(pub Vec<ValueType>);
 
-impl TryFrom<&Vec<Vec<Value>>> for ValueTypes {
+impl TryFrom<&[Vec<Value>]> for ValueTypes {
     type Error = &'static str;
 
-    fn try_from(value: &Vec<Vec<Value>>) -> Result<Self, Self::Error> {
+    fn try_from(value: &[Vec<Value>]) -> Result<Self, Self::Error> {
         let mut transpose = vec![vec![]; value[0].len()];
         for v in value {
             for (j, e) in v.into_iter().enumerate() {
@@ -141,6 +142,16 @@ impl TryFrom<&Vec<Vec<Value>>> for ValueTypes {
             v.dedup();
         });
         // println!("{transpose:?}");
+        write!(
+            std::fs::File::create("all_vals.txt").unwrap(),
+            "{:?}",
+            transpose
+                .iter()
+                .enumerate()
+                .filter(|(_, x)| x.iter().any(|v| matches!(v, Value::Category(_))))
+                .collect::<Vec<_>>()
+        )
+        .unwrap();
         for i in transpose.iter() {
             if i.iter().any(|x| matches!(x, Value::Number(_)))
                 && i.iter().any(|x| matches!(x, Value::Category(_)))
@@ -197,8 +208,8 @@ impl TryFrom<&Vec<Vec<Value>>> for ValueTypes {
 #[derive(Debug)]
 struct Corrs(Vec<f64>);
 
-impl From<(&Vec<Value>, &Vec<Vec<Value>>)> for Corrs {
-    fn from((target, pred): (&Vec<Value>, &Vec<Vec<Value>>)) -> Self {
+impl From<(&[Value], &[Vec<Value>])> for Corrs {
+    fn from((target, pred): (&[Value], &[Vec<Value>])) -> Self {
         let types = ValueTypes::try_from(pred).unwrap();
         let (tmean, tsd, count) = {
             let mut tmean = 0.0;
@@ -327,6 +338,7 @@ fn record_dist(
     max: Option<f64>,
     // Allows checking high variance dimensions first to short circuit fast.
     order: Option<&[usize]>,
+    max_check: Option<usize>,
 ) -> f64 {
     let max = max.unwrap_or(f64::INFINITY);
     let mut dist = 0.0;
@@ -338,7 +350,8 @@ fn record_dist(
     let order = order
         .or(poss_order.as_deref())
         .expect("One of these must be some");
-    for i in 0..a.len() {
+    let max_check = max_check.unwrap_or(order.len());
+    for i in 0..max_check {
         let av = &a[order[i]];
         let bv = &b[order[i]];
         let t = &types.0[order[i]];
@@ -351,12 +364,12 @@ fn record_dist(
                 };
                 (an - bn).abs() / sd
             }
-            (Value::Number(n), Value::None) | (Value::None, Value::Number(n)) => {
-                let ValueType::Number { mean, sd } = t else {
-                    panic!("ValueType Number expected but {t:?} found");
-                };
-                (n - mean).abs() / sd
-            }
+            // (Value::Number(n), Value::None) | (Value::None, Value::Number(n)) => {
+            //     let ValueType::Number { mean, sd } = t else {
+            //         panic!("ValueType Number expected but {t:?} found");
+            //     };
+            //     (n - mean).abs() / sd
+            // }
             (Value::Category(n), Value::Category(m)) => {
                 if n == m {
                     0.
@@ -364,8 +377,9 @@ fn record_dist(
                     1.
                 }
             }
-            (Value::Category(_), Value::None) | (Value::None, Value::Category(_)) => 1.,
-            (Value::None, Value::None) => 0.,
+            // (Value::Category(_), Value::None) | (Value::None, Value::Category(_)) => 1.,
+            // (Value::None, Value::None) => 0.,
+            (_, Value::None) | (Value::None, _) => 0.,
             (Value::Number(_), Value::Category(_)) | (Value::Category(_), Value::Number(_)) => {
                 unreachable!("Cannot have both numbers and categories")
             }
@@ -403,17 +417,21 @@ impl<T> PrioN<T> {
 
 fn knn(
     a: &Vec<Value>,
-    pop: &Vec<Vec<Value>>,
-    targets: &Vec<Value>,
+    pop: &[Vec<Value>],
+    targets: &[Value],
     types: &ValueTypes,
     corrs: &Corrs,
     // Allows checking high variance dimensions first to short circuit fast.
     order: Option<&[usize]>,
     n: usize,
+    max_check: Option<usize>,
 ) -> f64 {
     let mut prio: PrioN<usize> = PrioN::new(n);
     for (i, b) in pop.iter().enumerate() {
-        prio.insert(record_dist(a, b, types, corrs, prio.worst(), order), i);
+        prio.insert(
+            record_dist(a, b, types, corrs, prio.worst(), order, max_check),
+            i,
+        );
         // println!("{}", prio.0.len());
     }
     prio.0
@@ -428,9 +446,65 @@ fn knn(
         .sum()
 }
 
+fn prompt_record() -> Vec<Value> {
+    let mut rec = vec![Value::None; 120];
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+
+    print!("Gender: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[1] = Value::Category(s);
+
+    print!("Contract type: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[0] = Value::Category(s);
+
+    print!("Emergency state: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[88] = Value::Category(s);
+
+    print!("Education level: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[11] = Value::Category(s);
+
+    print!("Income type: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[10] = Value::Category(s);
+
+    print!("House type: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[85] = Value::Category(s);
+
+    print!("Own car?: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[2] = Value::Category(s);
+
+    print!("Family status: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[12] = Value::Category(s);
+
+    rec
+}
+
 fn main() {
     let mut file = ReaderBuilder::new()
-        .from_path("application_data.csv")
+        .from_path(std::env::args().nth(1).expect("Must include document path"))
         .unwrap();
     let headers: Vec<_> = file.headers().unwrap().iter().map(String::from).collect();
     let loaded: Vec<Vec<Value>> = file
@@ -440,13 +514,16 @@ fn main() {
         .collect();
     // println!("{loaded:?}");
     let targets: Vec<_> = loaded.iter().map(|v| v[1].clone()).collect();
-    println!("Loaded targets");
+    println!("Loaded targets.");
     let preds: Vec<_> = loaded.iter().map(|v| v[2..].to_vec()).collect();
-    println!("Loaded variables");
-    let types = ValueTypes::try_from(&preds).unwrap();
-    println!("Identified types");
-    let corrs = Corrs::from((&targets, &preds));
-    println!("{types:?}\n{corrs:?}");
+    println!("Loaded variables.");
+    let (targets, test) = targets.split_at(targets.len() * 29 / 30);
+    let (preds, preds_test) = preds.split_at(preds.len() * 29 / 30);
+    // println!("{preds:?}");
+    let types = ValueTypes::try_from(preds as &[_]).unwrap();
+    println!("Identified types.");
+    let corrs = Corrs::from((targets as &[_], preds as &[_]));
+    // println!("{types:?}\n{corrs:?}");
     write!(
         File::create("app_data_corrs.txt").unwrap(),
         "{types:?}\n{corrs:?}\n"
@@ -466,18 +543,44 @@ fn main() {
     .unwrap();
     // cor_ind.iter().for_each(|(x, _, _)| print!("{x}, "));
     let order: Vec<_> = cor_ind.into_iter().map(|(i, _, _)| i).collect();
-    println!("Computing error");
-    let mut err = 0.0;
-    let mut i = 0;
-    for (a, t) in preds.iter().zip(targets.iter()) {
-        i += 1;
-        println!("{i}");
-        let Value::Number(t) = t else {
-            panic!("Category in target variable");
-        };
-        let k = knn(a, &preds, &targets, &types, &corrs, Some(&order), 20);
-        err += (k - t.0).powi(2);
-    }
-    err = (err / (preds.len() as f64)).sqrt();
-    println!("Err: {err}");
+    // {
+    //     println!("Computing error");
+    //     let mut err = 0.0;
+    //     let mut i = 0;
+    //     let mut prop = 0.;
+    //     let mut test_freq = BTreeSet::new();
+    //     for (a, t) in preds_test.iter().zip(test.iter()) {
+    //         i += 1;
+    //         // println!("{i}");
+    //         if i % 10 == 0 {
+    //             print!("\r{i}");
+    //             std::io::stdout().flush().unwrap();
+    //         }
+    //         let Value::Number(t) = t else {
+    //             panic!("Category in target variable");
+    //         };
+    //         let k = knn(
+    //             a,
+    //             preds as &[_],
+    //             targets as &[_],
+    //             &types,
+    //             &corrs,
+    //             Some(&order),
+    //             16,
+    //             None,
+    //         );
+    //         test_freq.insert(F64(k));
+    //         // println!("{k} {t:?}");
+    //         err += (k - t.0).powi(2);
+    //         prop += t;
+    //     }
+    //     prop /= preds.len() as f64;
+    //     err = (err / (preds.len() as f64)).sqrt();
+    //     println!("Err: {err}, worst={}", (prop * (1.0 - prop)).sqrt());
+    //     println!("{test_freq:?}");
+    // }
+    let ir = prompt_record();
+    println!("\nGenerating prediction.");
+    let k = knn(&ir, preds, targets, &types, &corrs, Some(&order), 100, Some(8));
+    println!("Prediction for borrower default is {}%\n", k);
 }
