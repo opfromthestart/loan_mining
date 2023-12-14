@@ -451,23 +451,53 @@ fn prompt_record() -> Vec<Value> {
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
-    print!("Gender: M/F >");
+    print!("Gender: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
     rec[1] = Value::Category(s);
 
-    print!("Contract type: Cash loans/Revolving loans >");
+    print!("Contract type: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
     rec[0] = Value::Category(s);
 
-    print!("Emergency state: Yes/No >");
+    print!("Emergency state: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
     rec[88] = Value::Category(s);
+
+    print!("Education level: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[11] = Value::Category(s);
+
+    print!("Income type: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[10] = Value::Category(s);
+
+    print!("House type: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[85] = Value::Category(s);
+
+    print!("Own car?: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[2] = Value::Category(s);
+
+    print!("Family status: >");
+    stdout.flush().unwrap();
+    let mut s = String::new();
+    stdin.read_line(&mut s).unwrap();
+    rec[12] = Value::Category(s);
 
     rec
 }
@@ -549,10 +579,8 @@ fn main() {
     //     println!("Err: {err}, worst={}", (prop * (1.0 - prop)).sqrt());
     //     println!("{test_freq:?}");
     // }
-    loop {
-        println!("Input borrower data");
-        let ir = prompt_record();
-        let k = knn(&ir, preds, targets, &types, &corrs, Some(&order), 30, None);
-        println!("Prediction for borrower default is {k}");
-    }
+    let ir = prompt_record();
+    println!("\nGenerating prediction.");
+    let k = knn(&ir, preds, targets, &types, &corrs, Some(&order), 100, Some(8));
+    println!("Prediction for borrower default is {}%\n", k);
 }
