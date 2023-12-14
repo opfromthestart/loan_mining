@@ -514,14 +514,14 @@ fn main() {
         .collect();
     // println!("{loaded:?}");
     let targets: Vec<_> = loaded.iter().map(|v| v[1].clone()).collect();
-    println!("Loaded targets");
+    println!("Loaded targets.");
     let preds: Vec<_> = loaded.iter().map(|v| v[2..].to_vec()).collect();
-    println!("Loaded variables");
+    println!("Loaded variables.");
     let (targets, test) = targets.split_at(targets.len() * 29 / 30);
     let (preds, preds_test) = preds.split_at(preds.len() * 29 / 30);
     // println!("{preds:?}");
     let types = ValueTypes::try_from(preds as &[_]).unwrap();
-    println!("Identified types");
+    println!("Identified types.");
     let corrs = Corrs::from((targets as &[_], preds as &[_]));
     // println!("{types:?}\n{corrs:?}");
     write!(
