@@ -103,6 +103,8 @@ front_base = b"""<!DOCTYPE html>
 
 	    function hideOverlay() {
 	        document.getElementById('overlay').style.display = 'none';
+	        document.getElementById('loading-message').innerHTML = 'Processing your query. This can take 1-3 minutes.'
+	        document.getElementById('exit-button').style.display = 'none';
 	    }
 
     	handlers = {}
