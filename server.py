@@ -243,7 +243,7 @@ def do_process(handler):
 	length = int(handler.headers.get('Content-length'))
 	field_data = handler.rfile.read(length)
 	fields = json.loads(str(field_data,"UTF-8"))
-	process = subprocess.Popen('target/release/mining application_data.csv', stdout=PIPE, stderr=PIPE, stdin=PIPE)
+	process = subprocess.Popen(['target/release/mining', 'application_data.csv'], stdout=PIPE, stderr=PIPE, stdin=PIPE)
 	id = uuid.uuid4().hex
 	process_table[id] = {
 			'process': process,
