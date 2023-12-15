@@ -198,7 +198,7 @@ impl TryFrom<&[Vec<Value>]> for ValueTypes {
             }
             *t = ValueType::Number {
                 mean,
-                sd: (var / (count as f64)).sqrt(),
+                sd: (var / count as f64).sqrt()
             };
         }
         Ok(ValueTypes(types))
@@ -357,6 +357,8 @@ fn record_dist(
         let t = &types.0[order[i]];
         let r = &corrs.0[order[i]];
 
+        //println!("Feature {:?}: {:?} vs {:?}", order[i], av, bv);
+
         dist += match (av, bv) {
             (Value::Number(an), Value::Number(bn)) => {
                 let ValueType::Number { mean: _, sd } = t else {
@@ -455,49 +457,49 @@ fn prompt_record() -> Vec<Value> {
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
-    rec[1] = Value::Category(s);
+    rec[1] = Value::Category(s.trim().to_string());
 
     print!("Contract type: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
-    rec[0] = Value::Category(s);
+    rec[0] = Value::Category(s.trim().to_string());
 
     print!("Emergency state: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
-    rec[88] = Value::Category(s);
+    rec[88] = Value::Category(s.trim().to_string());
 
     print!("Education level: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
-    rec[11] = Value::Category(s);
+    rec[11] = Value::Category(s.trim().to_string());
 
     print!("Income type: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
-    rec[10] = Value::Category(s);
+    rec[10] = Value::Category(s.trim().to_string());
 
     print!("House type: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
-    rec[85] = Value::Category(s);
+    rec[85] = Value::Category(s.trim().to_string());
 
     print!("Own car?: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
-    rec[2] = Value::Category(s);
+    rec[2] = Value::Category(s.trim().to_string());
 
     print!("Family status: >");
     stdout.flush().unwrap();
     let mut s = String::new();
     stdin.read_line(&mut s).unwrap();
-    rec[12] = Value::Category(s);
+    rec[12] = Value::Category(s.trim().to_string());
 
     rec
 }
@@ -581,6 +583,7 @@ fn main() {
     // }
     let ir = prompt_record();
     println!("\nGenerating prediction.");
-    let k = knn(&ir, preds, targets, &types, &corrs, Some(&order), 100, Some(8));
-    println!("Prediction for borrower default is {}%\n", k);
+    let features: Vec<usize> = vec![1, 0, 88, 11, 10, 85, 2, 12];
+    let k = knn(&ir, preds, targets, &types, &corrs, Some(&features), 100, Some(8));
+    println!("Prediction for borrower default is {}%\n", k * 100.0);
 }

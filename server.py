@@ -280,55 +280,55 @@ class ReqHandler(BaseHTTPRequestHandler):
 			<form onsubmit="handle_form()" action="#" method="get">
 			    <label for="gender">Gender:</label>
 			    <select id="gender" name="gender">
-			        <option value="male">Male</option>
-			        <option value="female">Female</option>
-			        <option value="not_specified">XNA</option>
+			        <option value="M">M</option>
+			        <option value="F">F</option>
+			        <option value="XNA">XNA</option>
 			    </select>
 			    <br>
 
 			    <label for="contract_type">Contract Type:</label>
 			    <select id="contract_type" name="contract_type">
-			        <option value="cash_loans">Cash loans</option>
-			        <option value="revolving_loans">Revolving loans</option>
+			        <option value="Cash loans">Cash loans</option>
+			        <option value="Revolving loans">Revolving loans</option>
 			    </select>
 			    <br>
 
 			    <label for="emergency_state">Emergency State:</label>
 			    <select id="emergency_state" name="emergency_state">
-			        <option value="yes">Yes</option>
-			        <option value="no">No</option>
+			        <option value="Yes">Yes</option>
+			        <option value="No">No</option>
 			    </select>
 			    <br>
 
 			    <label for="education_level">Education Level:</label>
 			    <select id="education_level" name="education_level">
-			        <option value="lower_secondary">Lower secondary</option>
-			        <option value="secondary">Secondary</option>
-			        <option value="incomplete_higher">Incomplete higher</option>
-			        <option value="higher_education">Higher education</option>
-			        <option value="academic_degree">Academic degree</option>
+			        <option value="Lower secondary">Lower secondary</option>
+			        <option value="Secondary / secondary special">Secondary / secondary special</option>
+			        <option value="Incomplete higher">Incomplete higher</option>
+			        <option value="Higher education">Higher education</option>
+			        <option value="Academic degree">Academic degree</option>
 			    </select>
 			    <br>
 
 			    <label for="income_type">Income Type:</label>
 			    <select id="income_type" name="income_type">
-			        <option value="unemployed">Unemployed</option>
-			        <option value="maternity_leave">Maternity leave</option>
-			        <option value="pensioner">Pensioner</option>
-			        <option value="working">Working</option>
-			        <option value="student">Student</option>
-			        <option value="state_servant">State servant</option>
-			        <option value="businessman">Businessman</option>
-			        <option value="commercial_associate">Commercial associate</option>
+			        <option value="Unemployed">Unemployed</option>
+			        <option value="Maternity leave">Maternity leave</option>
+			        <option value="Pensioner">Pensioner</option>
+			        <option value="Working">Working</option>
+			        <option value="Student">Student</option>
+			        <option value="State servant">State servant</option>
+			        <option value="Businessman">Businessman</option>
+			        <option value="Commercial associate">Commercial associate</option>
 			    </select>
 			    <br>
 
 			    <label for="house_type">House Type:</label>
 			    <select id="house_type" name="house_type">
-			        <option value="na">N/A</option>
-			        <option value="specific_housing">specific housing</option>
-			        <option value="terraced_house">terraced house</option>
-			        <option value="block_of_flats">block of flats</option>
+			        <option value="N/A">N/A</option>
+			        <option value="specific housing">specific housing</option>
+			        <option value="terraced house">terraced house</option>
+			        <option value="block of flats">block of flats</option>
 			    </select>
 			    <br>
 
@@ -341,12 +341,12 @@ class ReqHandler(BaseHTTPRequestHandler):
 
 			    <label for="family_status">Family Status:</label>
 			    <select id="family_status" name="family_status">
-			        <option value="single">Single</option>
-			        <option value="married">Married</option>
-			        <option value="civilly_married">Civilly married</option>
-			        <option value="separated">Separated</option>
-			        <option value="widow">Widow</option>
-			        <option value="unknown">Unknown</option>
+			        <option value="Single">Single</option>
+			        <option value="Married">Married</option>
+			        <option value="Civilly married">Civilly married</option>
+			        <option value="Separated">Separated</option>
+			        <option value="Widow">Widow</option>
+			        <option value="Unknown">Unknown</option>
 			    </select>
 			    <br>
 
